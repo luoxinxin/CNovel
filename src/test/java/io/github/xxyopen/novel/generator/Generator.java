@@ -16,7 +16,7 @@ public class Generator {
 
     public static void main(String[] args) {
         System.out.println(System.getenv().get("USER"));
-        genCode("book_comment");
+        genCode("book_category");
     }
 
     private static void genCode(String tables) {

@@ -34,4 +34,6 @@ public class ApiRouterConsts {
 
     public static final String API_FRONT_BOOK_URL_PREFIX = API_FRONT_URL_PREFIX + BOOK_URL_PREFIX;
 
+    public static final String API_ADMIN_URL_PREFIX = API_URL_PREFIX + "/admin";
+
 }

@@ -30,7 +30,11 @@ public enum ErrorCodeEnum {
 
     USER_PASSWORD_ERROR("A0210", "用户密码错误"),
 
-    USER_COMMENTED("A2001", "用户已发表评论");
+    USER_COMMENTED("A2001", "用户已发表评论"),
+
+    USER_REQUEST_PARAM_ERROR("A0400", "用户请求参数错误"),
+
+    USER_REQ_MANY("A0501", "请求超出限制"),;
 
     private final String code;
 

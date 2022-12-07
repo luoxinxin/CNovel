@@ -1,4 +1,4 @@
-package io.github.xxyopen.novel.core.common;
+package io.github.xxyopen.novel.core.common.util;
 
 import lombok.experimental.UtilityClass;
 

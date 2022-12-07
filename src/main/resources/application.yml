@@ -43,6 +43,10 @@ novel:
   jwt:
     secret: E66559580A1ADF48CDD928516062F12E
 
+  file:
+    upload:
+      path: C:\Users\htuser\novel
+
 
 --- #---------------------?????---------------------------
 spring:

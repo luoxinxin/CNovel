@@ -1,6 +1,6 @@
 package io.github.xxyopen.novel.manager.cache;
 
-import io.github.xxyopen.novel.core.common.ImgVerifyCodeUtils;
+import io.github.xxyopen.novel.core.common.util.ImgVerifyCodeUtils;
 import io.github.xxyopen.novel.core.constant.CacheConsts;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

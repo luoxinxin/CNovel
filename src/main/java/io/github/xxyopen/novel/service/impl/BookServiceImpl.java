@@ -9,10 +9,7 @@ import io.github.xxyopen.novel.core.common.req.PageReqDto;
 import io.github.xxyopen.novel.core.common.resp.PageRespDto;
 import io.github.xxyopen.novel.core.common.resp.RestResp;
 import io.github.xxyopen.novel.core.constant.DatabaseConsts;
-import io.github.xxyopen.novel.dao.entity.BookChapter;
-import io.github.xxyopen.novel.dao.entity.BookComment;
-import io.github.xxyopen.novel.dao.entity.BookContent;
-import io.github.xxyopen.novel.dao.entity.BookInfo;
+import io.github.xxyopen.novel.dao.entity.*;
 import io.github.xxyopen.novel.dao.mapper.BookChapterMapper;
 import io.github.xxyopen.novel.dao.mapper.BookCommentMapper;
 import io.github.xxyopen.novel.dao.mapper.BookContentMapper;
@@ -21,18 +18,21 @@ import io.github.xxyopen.novel.dto.AuthorInfoDto;
 import io.github.xxyopen.novel.dto.req.BookAddReqDto;
 import io.github.xxyopen.novel.dto.req.ChapterAddReqDto;
 import io.github.xxyopen.novel.dto.req.UserCommentReqDto;
-import io.github.xxyopen.novel.dto.resp.BookChapterRespDto;
-import io.github.xxyopen.novel.dto.resp.BookInfoRespDto;
-import io.github.xxyopen.novel.manager.cache.AuthorInfoCacheManager;
+import io.github.xxyopen.novel.dto.resp.*;
+import io.github.xxyopen.novel.manager.cache.*;
+import io.github.xxyopen.novel.manager.dao.UserDaoManager;
 import io.github.xxyopen.novel.service.BookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.bytebuddy.asm.Advice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Objects;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +48,20 @@ public class BookServiceImpl implements BookService {
     private final BookContentMapper bookContentMapper;
 
     private final BookCommentMapper bookCommentMapper;
+
+    private final BookCategoryCacheManager bookCategoryCacheManager;
+
+    private final BookInfoCacheManager bookInfoCacheManager;
+
+    private final BookChapterCacheManager bookChapterCacheManager;
+
+    private final BookContentCacheManager bookContentCacheManager;
+
+    private final BookRankCacheManager bookRankCacheManager;
+
+    private final UserDaoManager userDaoManager;
+
+    private static final Integer REC_BOOK_COUNT = 4;
     @Override
     public RestResp<Void> saveBook(BookAddReqDto dto) {
         QueryWrapper<BookInfo> queryWrapper = new QueryWrapper<>();
@@ -138,6 +152,8 @@ public class BookServiceImpl implements BookService {
         newBookInfo.setUpdateTime(LocalDateTime.now());
         bookInfoMapper.updateById(newBookInfo);
 
+        bookInfoCacheManager.evictBookInfoCache(dto.getBookId());
+
         return RestResp.ok();
     }
 
@@ -194,6 +210,169 @@ public class BookServiceImpl implements BookService {
                 .eq(DatabaseConsts.BookCommentTable.COLUMN_USER_ID, userId);
         bookCommentMapper.delete(queryWrapper);
         return RestResp.ok();
+    }
+
+    @Override
+    public RestResp<List<BookCategoryRespDto>> listCategory(Integer workDirection) {
+        return RestResp.ok(bookCategoryCacheManager.listCategory(workDirection));
+    }
+
+    @Override
+    public RestResp<BookInfoRespDto> getBookById(Long bookId) {
+        return RestResp.ok(bookInfoCacheManager.getBookInfo(bookId));
+    }
+
+    @Override
+    public RestResp<Void> addVisitCount(Long bookId) {
+        bookInfoMapper.addVisitCount(bookId);
+        return RestResp.ok();
+    }
+
+    @Override
+    public RestResp<BookChapterAboutRespDto> getLastChapterAbout(Long bookId) {
+        BookInfoRespDto bookInfo = bookInfoCacheManager.getBookInfo(bookId);
+
+        BookChapterRespDto chapter = bookChapterCacheManager.getChapter(bookInfo.getLastChapterId());
+
+        String bookContent = bookContentCacheManager.getBookContent(chapter.getId());
+
+        QueryWrapper<BookChapter> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq(DatabaseConsts.BookChapterTable.COLUMN_BOOT_ID, bookId);
+        Long chapterTotal = bookChapterMapper.selectCount(queryWrapper);
+
+        return RestResp.ok(BookChapterAboutRespDto.builder()
+                        .chapterTotal(chapterTotal)
+                        .chapterInfo(chapter)
+                        .contentSummary(bookContent.substring(0, 30))
+                .build());
+    }
+
+    @Override
+    public RestResp<List<BookInfoRespDto>> listRecBooks(Long bookId) throws NoSuchAlgorithmException {
+        Long categoryId = bookInfoCacheManager.getBookInfo(bookId).getCategoryId();
+        List<Long> lastUpdateIdList = bookInfoCacheManager.getLastUpdateIdList(categoryId);
+        List<BookInfoRespDto> respDtoList = new ArrayList<>();
+        List<Integer> recIdIndexList = new ArrayList<>();
+        int count = 0;
+        SecureRandom random = new SecureRandom();
+        Random rand = random.getInstanceStrong();
+        while (count < REC_BOOK_COUNT) {
+            int recIdIndex = rand.nextInt(lastUpdateIdList.size());
+            if (!recIdIndexList.contains(recIdIndex)) {
+                recIdIndexList.add(recIdIndex);
+                bookId = lastUpdateIdList.get(recIdIndex);
+                BookInfoRespDto bookInfo = bookInfoCacheManager.getBookInfo(bookId);
+                respDtoList.add(bookInfo);
+                count ++;
+            }
+        }
+        return RestResp.ok(respDtoList);
+    }
+
+    @Override
+    public RestResp<List<BookChapterRespDto>> listChapters(Long bookId) {
+        QueryWrapper<BookChapter> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq(DatabaseConsts.BookChapterTable.COLUMN_BOOT_ID, bookId)
+                .orderByAsc(DatabaseConsts.BookChapterTable.COLUMN_CHAPTER_NUM);
+        return RestResp.ok(bookChapterMapper.selectList(queryWrapper).stream()
+                .map(v -> {
+                    return BookChapterRespDto.builder()
+                            .id(v.getId())
+                            .chapterName(v.getChapterName())
+                            .isVip(v.getIsVip())
+                            .build();
+                }).toList());
+    }
+
+    @Override
+    public RestResp<BookContentAboutRespDto> getBookContentAbout(Long chapterId) {
+        log.debug("userId:{}", UserHolder.getUserId());
+        BookChapterRespDto chapter = bookChapterCacheManager.getChapter(chapterId);
+        String bookContent = bookContentCacheManager.getBookContent(chapterId);
+        BookInfoRespDto bookInfo = bookInfoCacheManager.getBookInfo(chapter.getBookId());
+        return RestResp.ok(BookContentAboutRespDto.builder()
+                        .bookContent(bookContent)
+                        .bookInfo(bookInfo)
+                        .chapterInfo(chapter)
+                .build());
+    }
+
+    @Override
+    public RestResp<Long> getPreChapterId(Long chapterId) {
+        BookChapterRespDto chapter = bookChapterCacheManager.getChapter(chapterId);
+        Long bookId = chapter.getBookId();
+        Integer chapterNum = chapter.getChapterNum();
+        QueryWrapper<BookChapter> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq(DatabaseConsts.BookChapterTable.COLUMN_BOOT_ID, bookId)
+                .lt(DatabaseConsts.BookChapterTable.COLUMN_CHAPTER_NUM, chapterNum)
+                .orderByDesc(DatabaseConsts.BookChapterTable.COLUMN_CHAPTER_NUM)
+                .last(DatabaseConsts.SqlEnum.LIMIT_1.getSql());
+        return RestResp.ok(Optional.ofNullable(bookChapterMapper.selectOne(queryWrapper))
+                .map(BookChapter::getId)
+                .orElse(null));
+    }
+
+    @Override
+    public RestResp<Long> getNextChapterId(Long chapterId) {
+        BookChapterRespDto chapter = bookChapterCacheManager.getChapter(chapterId);
+        Long bookId = chapter.getBookId();
+        Integer chapterNum = chapter.getChapterNum();
+        QueryWrapper<BookChapter> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq(DatabaseConsts.BookChapterTable.COLUMN_BOOT_ID, bookId)
+                .gt(DatabaseConsts.BookChapterTable.COLUMN_CHAPTER_NUM, chapterNum)
+                .orderByAsc(DatabaseConsts.BookChapterTable.COLUMN_CHAPTER_NUM)
+                .last(DatabaseConsts.SqlEnum.LIMIT_1.getSql());
+        return RestResp.ok(Optional.ofNullable(bookChapterMapper.selectOne(queryWrapper))
+                .map(BookChapter::getId)
+                .orElse(null));
+    }
+
+    @Override
+    public RestResp<List<BookRankRespDto>> listVisitRankBooks() {
+        return RestResp.ok(bookRankCacheManager.listUpdateRankBooks());
+    }
+
+    @Override
+    public RestResp<List<BookRankRespDto>> listNewestRankBooks() {
+        return RestResp.ok(bookRankCacheManager.listNewestRankBooks());
+    }
+
+    @Override
+    public RestResp<List<BookRankRespDto>> listUpdateRankBooks() {
+        return RestResp.ok(bookRankCacheManager.listUpdateRankBooks());
+    }
+
+    @Override
+    public RestResp<BookCommentRespDto> listNewestComments(Long bookId) {
+        QueryWrapper<BookComment> commentCountQueryWrapper = new QueryWrapper<>();
+        commentCountQueryWrapper.eq(DatabaseConsts.BookCommentTable.COLUMN_BOOK_ID, bookId);
+        Long commentTotal = bookCommentMapper.selectCount(commentCountQueryWrapper);
+        BookCommentRespDto commentRespDto = BookCommentRespDto.builder().commentTotal(commentTotal).build();
+        if (commentTotal > 0) {
+            QueryWrapper<BookComment> commentQueryWrapper = new QueryWrapper<BookComment>();
+            commentQueryWrapper.eq(DatabaseConsts.BookCommentTable.COLUMN_BOOK_ID, bookId)
+                    .orderByDesc(DatabaseConsts.CommonColumnEum.CREATE_TIME.getName())
+                    .last(DatabaseConsts.SqlEnum.LIMIT_5.getSql());
+            List<BookComment> bookComments = bookCommentMapper.selectList(commentQueryWrapper);
+            List<Long> userIds = bookComments.stream().map(BookComment::getUserId).toList();
+            List<UserInfo> userInfos = userDaoManager.listUsers(userIds);
+            Map<Long, UserInfo> userInfoMap = userInfos.stream().collect(Collectors.toMap(UserInfo::getId, Function.identity()));
+            List<BookCommentRespDto.CommentInfo> commentInfos = bookComments.stream()
+                            .map(v -> BookCommentRespDto.CommentInfo.builder()
+                                    .id(v.getId())
+                                    .commentUserId(v.getUserId())
+                                    .commentUser(userInfoMap.get(v.getUserId()).getUsername())
+                                    .commentUserPhoto(userInfoMap.get(v.getUserId()).getUserPhoto())
+                                    .commentContent(v.getCommentContent())
+                                    .commentTime(v.getCreateTime())
+                                    .build()
+                            ).toList();
+            commentRespDto.setComments(commentInfos);
+        }else {
+            commentRespDto.setComments(Collections.emptyList());
+        }
+
+        return RestResp.ok(commentRespDto);
     }
 
 

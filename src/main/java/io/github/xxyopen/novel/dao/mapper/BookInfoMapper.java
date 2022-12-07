@@ -5,6 +5,8 @@ import io.github.xxyopen.novel.dao.entity.BookInfo;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import io.github.xxyopen.novel.dto.req.BookSearchReqDto;
 import io.github.xxyopen.novel.dto.resp.BookInfoRespDto;
+import io.swagger.v3.oas.annotations.Parameter;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -19,5 +21,7 @@ import java.util.List;
 public interface BookInfoMapper extends BaseMapper<BookInfo> {
 
     List<BookInfo> searchBooks(IPage<BookInfoRespDto> page, BookSearchReqDto condition);
+
+    void addVisitCount(@Param("bookId") Long bookId);
 
 }

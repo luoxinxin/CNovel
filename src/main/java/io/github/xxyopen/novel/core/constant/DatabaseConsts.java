@@ -69,6 +69,23 @@ public class DatabaseConsts {
 
     }
 
+    public static class BookCategoryTable {
+        private BookCategoryTable() {
+            throw new IllegalStateException(SystemConfigConsts.CONST_INSTANCE_EXCEPTION_MSG);
+        }
+
+        public static final String COLUMN_WORK_DIRECTION = "work_direction";
+    }
+
+    public static class BookContentTable {
+
+        private BookContentTable() {
+            throw new IllegalStateException(SystemConfigConsts.CONST_INSTANCE_EXCEPTION_MSG);
+        }
+
+        public static final String COLUMN_CHAPTER_ID = "chapter_id";
+
+    }
 
     @Getter
     public enum SqlEnum {

@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.xxyopen.novel.dao.mapper.BookInfoMapper">
+    <update id="addVisitCount">
+        update book_info set visit_count = visit_count + 1 where id = {bookId}
+    </update>
 
     <select id="searchBooks" resultType="io.github.xxyopen.novel.dao.entity.BookInfo">
         select
             id,category_id,category_name,book_name,author_name,word_count,last_chapter_name
         from book_info where word_count > 0
-        <if test="condition.keyword ! = null and condition.keyword != ''">
+        <if test="condition.keyword != null and condition.keyword != ''">
             and (book_name like concat('%',#{condition.keyword},'%') or author_name like
             concat('%',#{condition.keyword},'%'))
         </if>
